@@ -14,42 +14,48 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// 🔥 DNB Proxy with proper headers
+// 🔥 THIS ROUTE MUST EXIST
 app.get("/dnb-search", async (req, res) => {
   const { company, country } = req.query;
 
-  const url = "https://www.dnb.com/business-directory/api/cleansematch";
+  if (!company || !country) {
+    return res.status(400).json({ error: "Missing params" });
+  }
 
   try {
-    const response = await axios.get(url, {
-      params: {
-        countrycode: country.toLowerCase(),
-        location: "",
-        searchterm: company,
-        streetaddress: ""
-      },
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": "https://www.dnb.com/business-directory/company-search.html",
-        "Origin": "https://www.dnb.com",
-        "Connection": "keep-alive"
-      },
-      timeout: 15000
-    });
+    const response = await axios.get(
+      "https://www.dnb.com/business-directory/api/cleansematch",
+      {
+        params: {
+          countrycode: country.toLowerCase(),
+          location: "",
+          searchterm: company,
+          streetaddress: ""
+        },
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+          "Accept": "application/json",
+          "Accept-Language": "en-US,en;q=0.9",
+          "Referer":
+            "https://www.dnb.com/business-directory/company-search.html",
+          "Origin": "https://www.dnb.com"
+        },
+        timeout: 15000
+      }
+    );
 
     res.json(response.data);
-  } catch (error) {
-    console.error("DNB ERROR:", error.response?.status);
+  } catch (err) {
+    console.error("DNB ERROR:", err.message);
     res.status(500).json({
-      error: "DNB blocked request",
-      status: error.response?.status || "NO_RESPONSE"
+      error: "DNB request failed",
+      details: err.message
     });
   }
 });
 
-app.listen(3000, () => {
-  console.log("✅ Server running at http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
 });
