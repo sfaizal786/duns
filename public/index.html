@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DNB Bulk Search (Up to 5 Matches)</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #f4f6f8;
+  padding: 20px;
+}
+textarea {
+  width: 100%;
+  height: 140px;
+  padding: 8px;
+  font-size: 14px;
+}
+button {
+  padding: 10px 18px;
+  margin-top: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  background: #fff;
+}
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  font-size: 13px;
+}
+th {
+  background: #222;
+  color: #fff;
+}
+.error {
+  color: red;
+  font-weight: bold;
+}
+.success {
+  color: green;
+  font-weight: bold;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🔍 DNB Bulk Search (Company + Country Code | Up to 5 Results)</h2>
+
+<b>Company Names (one per line)</b>
+<textarea id="companyInput" placeholder="amazon
+google
+microsoft"></textarea>
+
+<b>Country Codes (one per line – ISO2)</b>
+<textarea id="countryInput" placeholder="US
+US
+IN"></textarea>
+
+<button onclick="startSearch()">Start Bulk Search</button>
+<button onclick="downloadCSV()">Download CSV</button>
+
+<table>
+<thead>
+<tr>
+  <th>Input Company</th>
+  <th>Country Code</th>
+  <th>Matched Company</th>
+  <th>DUNS</th>
+  <th>Address</th>
+  <th>Region</th>
+  <th>ZIP</th>
+  <th>Status</th>
+</tr>
+</thead>
+<tbody id="resultBody"></tbody>
+</table>
+
+<script>
+const results = [];
+
+async function startSearch() {
+  const companies = document.getElementById("companyInput").value
+    .split("\n").map(v => v.trim()).filter(Boolean);
+
+  const countries = document.getElementById("countryInput").value
+    .split("\n").map(v => v.trim().toUpperCase()).filter(Boolean);
+
+  if (companies.length !== countries.length) {
+    alert("❌ Company count and Country code count must be SAME");
+    return;
+  }
+
+  results.length = 0;
+  document.getElementById("resultBody").innerHTML = "";
+
+  for (let i = 0; i < companies.length; i++) {
+    await searchDNB(companies[i], countries[i]);
+    await delay(1000); // safe delay
+  }
+}
+
+async function searchDNB(company, countryCode) {
+  try {
+    const res = await fetch(
+      `/dnb-search?company=${encodeURIComponent(company)}&country=${countryCode}`
+    );
+
+    const data = await res.json();
+
+    // ❌ No results
+    if (!data.companies || data.companies.length === 0) {
+      addRow({
+        company,
+        countryCode,
+        name: "",
+        duns: "",
+        address: "",
+        region: "",
+        zip: "",
+        status: "NOT MATCHED"
+      });
+      return;
+    }
+
+    // ✅ Show UP TO 5 matches
+    const maxResults = Math.min(5, data.companies.length);
+
+    for (let i = 0; i < maxResults; i++) {
+      const c = data.companies[i];
+
+      addRow({
+        company,
+        countryCode,
+        name: c.primaryName || "",
+        duns: c.duns || "",
+        address: c.companyAddress || "",
+        region: c.companyRegion || "",
+        zip: c.companyZipCode || "",
+        status: "MATCHED"
+      });
+    }
+
+  } catch (err) {
+    addRow({
+      company,
+      countryCode,
+      name: "",
+      duns: "",
+      address: "",
+      region: "",
+      zip: "",
+      status: "ERROR"
+    });
+  }
+}
+
+function addRow(r) {
+  results.push(r);
+
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td>${r.company}</td>
+    <td>${r.countryCode}</td>
+    <td>${r.name}</td>
+    <td>${r.duns}</td>
+    <td>${r.address}</td>
+    <td>${r.region}</td>
+    <td>${r.zip}</td>
+    <td class="${r.status === 'MATCHED' ? 'success' : 'error'}">${r.status}</td>
+  `;
+  document.getElementById("resultBody").appendChild(tr);
+}
+
+function downloadCSV() {
+  if (!results.length) {
+    alert("No data available");
+    return;
+  }
+
+  const headers = Object.keys(results[0]).join(",");
+  const rows = results.map(r =>
+    Object.values(r).map(v => `"${v}"`).join(",")
+  );
+
+  const csv = [headers, ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "dnb_bulk_results.csv";
+  a.click();
+}
+
+function delay(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+</script>
+
+</body>
+</html>
